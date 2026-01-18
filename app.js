@@ -132,16 +132,19 @@ async function startScanner() {
             return;
         }
 
+        // Affiche le container AVANT le launch pour voir le spinner
+        elements.scannerContainer.classList.remove("hidden");
+
         await barcodeScanner.launch();
 
-        elements.scannerContainer.classList.remove("hidden");
-        // Re-force le container car dynamsoft peut avoir ses propres idées
-        barcodeScanner.show();
+        // barcodeScanner.show() n'est pas nécessaire après launch()
 
         isScanning = true;
         updateToggleButton(true);
         console.log("Scanner démarré");
     } catch (error) {
+        // En cas d'erreur au démarrage, on masque le container
+        elements.scannerContainer.classList.add("hidden");
         // ... (reste du catch)
         console.error("Erreur démarrage scanner:", error);
 
