@@ -46,35 +46,13 @@ async function startScanner() {
         el.btnToggle.disabled = true;
         el.btnText.textContent = "Chargement...";
 
-        // 2. Initialize Scanner (Singleton-ish)
-        if (!barcodeScanner) {
-            barcodeScanner = await Dynamsoft.BarcodeScanner.createInstance();
+        // 2. Cleanup previous instance if any
+        if (barcodeScanner) {
+            try { barcodeScanner.dispose(); } catch (e) { }
+            barcodeScanner = null;
         }
 
-        // 3. Configure Scanner
-        await barcodeScanner.updateRuntimeSettings("speed"); // Preset for speed
-        const settings = await barcodeScanner.getRuntimeSettings();
-        settings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_CODE_128;
-        await barcodeScanner.updateRuntimeSettings(settings);
-
-        // 4. Configure UI (Native Controls)
-        let scannerViewConfig = {
-            // Container defined here
-            container: el.videoContainer,
-            showCloseButton: true, // NATIVE CLOSE BUTTON
-            showFlashButton: true,
-            cameraSwitchControl: "toggleFrontBack",
-            // Custom overlay? No, user wants simple.
-        };
-
-        await barcodeScanner.updateVideoSettings({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" } });
-
-        // Note: createInstance doesn't take config quite like the simplified constructor in previous versions?
-        // Actually the previous constructor `new Dynamsoft.BarcodeScanner(config)` was the high-level API.
-        // Let's stick to the high-level API which is easier for UI config.
-
-        // Re-init with high level API for simpler UI config
-        if (barcodeScanner) { try { barcodeScanner.dispose(); } catch (e) { } }
+        // 3. Configure & Create (High Level API)
 
         const config = {
             license: CONFIG.LICENSE_KEY,
