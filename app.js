@@ -171,9 +171,9 @@ isScanning = false;
 updateToggleButton(false);
 console.log("Scanner arrêté");
 
-    // On ne relance PAS initScanner ici, sinon ça repart en boucle si on avait un auto-start.
-    // L'initialisation se fera au prochain click sur Démarrer.
-}
+// On ne relance PAS initScanner ici, sinon ça repart en boucle si on avait un auto-start.
+// L'initialisation se fera au prochain click sur Démarrer.
+
 
 function toggleScanner() {
     console.log("Toggle click, isScanning:", isScanning);
