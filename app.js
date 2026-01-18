@@ -69,8 +69,8 @@ async function initScanner() {
             // Masquer le bouton powered by
             showPoweredByDynamsoft: false,
 
-            // Ne PAS démarrer automatiquement la capture lors de l'init si on veut contrôler le démarrage
-            autoStartCapturing: false,
+            // Démarrer automatiquement la capture une fois la caméra ouverte (Requis pour SM_MULTI_UNIQUE)
+            autoStartCapturing: true,
 
             // Masquer le bouton d'upload d'image
             showUploadImageButton: false,
@@ -110,11 +110,9 @@ async function initScanner() {
         // Créer l'instance du scanner
         barcodeScanner = new Dynamsoft.BarcodeScanner(config);
 
-        // Ne pas lancer le scanner automatiquement ici si on veut le contrôler manuellement
-        // Le premier lancement se fera via le bouton ou explicitement
-        if (isScanning) {
-            await startScanner();
-        }
+        // Ne pas lancer le scanner automatiquement ici. 
+        // L'initialisation est faite, mais le lancement (launch) sera géré par toggleScanner/startScanner
+        console.log("Scanner initialisé.");
 
     } catch (error) {
         console.error("Erreur initialisation scanner:", error);
@@ -129,11 +127,17 @@ async function startScanner() {
         elements.btnToggle.disabled = true;
         elements.btnToggleText.textContent = "Chargement...";
 
+        if (isScanning) {
+            console.log("Launch annulé car déjà arrêté");
+            return;
+        }
+
         await barcodeScanner.launch();
 
         isScanning = true;
         updateToggleButton(true);
     } catch (error) {
+        // ... (reste du catch)
         console.error("Erreur démarrage scanner:", error);
 
         // Si l'utilisateur a annulé, ce n'est pas une erreur
@@ -149,9 +153,11 @@ async function startScanner() {
 
 function stopScanner() {
     if (barcodeScanner) {
-        // En mode single/multi unique, close() suffit pour arrêter la caméra sans détruire l'instance
-        // Mais dispose() nettoie tout. Si on utilise dispose(), il faut recréer l'instance.
-        barcodeScanner.dispose();
+        try {
+            barcodeScanner.dispose();
+        } catch (e) {
+            console.error("Erreur dispose:", e);
+        }
         barcodeScanner = null;
     }
     isScanning = false;
