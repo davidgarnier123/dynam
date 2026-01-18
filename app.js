@@ -5,17 +5,12 @@
 
 // ===== Configuration =====
 const CONFIG = {
-    // IMPORTANT: Remplacez par votre clé API Dynamsoft
     LICENSE_KEY: "DLS2eyJoYW5kc2hha2VDb2RlIjoiMTA1MDYwNTQxLU1UQTFNRFl3TlRReExYZGxZaTFVY21saGJGQnliMm8iLCJtYWluU2VydmVyVVJMIjoiaHR0cHM6Ly9tZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwib3JnYW5pemF0aW9uSUQiOiIxMDUwNjA1NDEiLCJzdGFuZGJ5U2VydmVyVVJMIjoiaHR0cHM6Ly9zZGxzLmR5bmFtc29mdG9ubGluZS5jb20vIiwiY2hlY2tDb2RlIjo1OTU1MDkyODN9",
-
-    // Temps avant qu'un code identique puisse être scanné à nouveau (ms)
     DUPLICATE_FORGET_TIME: 3000,
-
-    // Clé localStorage pour persister l'inventaire
     STORAGE_KEY: "barcode_inventory"
 };
 
-// ===== État de l'application =====
+// ===== État Global =====
 let barcodeScanner = null;
 let isScanning = false;
 let inventory = [];
@@ -38,196 +33,148 @@ document.addEventListener("DOMContentLoaded", () => {
     loadInventory();
     renderInventory();
     setupEventListeners();
-    // On initialise le scanner mais sans le démarrer
-    // initScanner(); // On laisse le bouton gérer l'init
     updateToggleButton(false);
 });
 
-// ===== Configuration des événements =====
 function setupEventListeners() {
     elements.btnToggle.addEventListener("click", toggleScanner);
     elements.btnClear.addEventListener("click", clearInventory);
     elements.btnExport.addEventListener("click", exportToCSV);
 }
 
-// ===== Scanner Dynamsoft =====
-async function initScanner() {
+// ===== Logique du Scanner =====
+
+async function startScanning() {
+    if (isScanning || barcodeScanner) return;
+
     try {
-        // Configuration du scanner
+        console.log("Démarrage du scanner...");
+        updateToggleButton(true, "Chargement...");
+        elements.btnToggle.disabled = true;
+
+        // 1. Vérifier si Dynamsoft est chargé
+        if (typeof Dynamsoft === "undefined") {
+            throw new Error("La librairie Dynamsoft n'est pas chargée. Vérifiez votre connexion internet.");
+        }
+
+        // 2. Afficher le container (pour le feedback visuel)
+        elements.scannerContainer.classList.remove("hidden");
+
+        // 3. Configuration & Création de l'instance
+        // On recrée l'instance à chaque démarrage pour éviter les états incohérents
         const config = {
             license: CONFIG.LICENSE_KEY,
-
-            // Mode scan multiple unique - continue de scanner
             scanMode: Dynamsoft.EnumScanMode.SM_MULTI_UNIQUE,
-
-            // Uniquement Code 128
             barcodeFormats: [Dynamsoft.DBR.EnumBarcodeFormat.BF_CODE_128],
-
-            // Temps avant qu'un doublon puisse être signalé
             duplicateForgetTime: CONFIG.DUPLICATE_FORGET_TIME,
-
-            // Masquer le bouton powered by
             showPoweredByDynamsoft: false,
-
-            // Démarrer automatiquement la capture une fois la caméra ouverte (Requis pour SM_MULTI_UNIQUE)
-            autoStartCapturing: true,
-
-            // Masquer le bouton d'upload d'image
+            autoStartCapturing: true, // Important pour le mode continu
             showUploadImageButton: false,
-
-            // Désactiver la vue résultat intégrée (on gère notre propre liste)
             showResultView: false,
-
-            // Container pour le scanner
             container: elements.scannerContainer,
-
-            // Configuration de la vue scanner
             scannerViewConfig: {
                 showCloseButton: false,
                 showFlashButton: true,
-                cameraSwitchControl: "toggleFrontBack"
+                cameraSwitchControl: "toggleFrontBack",
+                // Optionnel: configurer la zone de scan si besoin
             },
-
-            // Callback appelé à chaque nouveau code unique détecté
             onUniqueBarcodeScanned: (result) => {
                 handleBarcodeScanned(result);
             },
-
-            // Callback quand le scanner est prêt
             onInitReady: (components) => {
-                console.log("Scanner initialisé et prêt");
-                // Activer le laser de scan pour feedback visuel
                 components.cameraView.setScanLaserVisible(true);
             },
-
-            // Callback quand la caméra s'ouvre
             onCameraOpen: () => {
-                console.log("Caméra ouverte");
-                updateToggleButton(true);
+                console.log("Caméra active");
             }
         };
 
-        // Créer l'instance du scanner
         barcodeScanner = new Dynamsoft.BarcodeScanner(config);
 
-        // Ne pas lancer le scanner automatiquement ici. 
-        // L'initialisation est faite, mais le lancement (launch) sera géré par toggleScanner/startScanner
-        console.log("Scanner initialisé.");
-
-    } catch (error) {
-        console.error("Erreur initialisation scanner:", error);
-        showNotification("Erreur: " + error.message, true);
-    }
-}
-
-async function startScanner() {
-    if (!barcodeScanner) return;
-
-    try {
-        elements.btnToggle.disabled = true;
-        elements.btnToggleText.textContent = "Chargement...";
-
-        if (isScanning) {
-            console.log("Launch annulé car déjà arrêté");
-            return;
-        }
-
-        // Affiche le container AVANT le launch pour voir le spinner
-        elements.scannerContainer.classList.remove("hidden");
-
+        // 4. Lancement
         await barcodeScanner.launch();
 
-        // barcodeScanner.show() n'est pas nécessaire après launch()
-
         isScanning = true;
-        updateToggleButton(true);
-        console.log("Scanner démarré");
-    } catch (error) {
-        // En cas d'erreur au démarrage, on masque le container
-        elements.scannerContainer.classList.add("hidden");
-        // ... (reste du catch)
-        console.error("Erreur démarrage scanner:", error);
+        updateToggleButton(true, "Arrêter");
+        console.log("Scanner démarré avec succès");
 
-        // Si l'utilisateur a annulé, ce n'est pas une erreur
-        if (error.message && error.message.includes("cancelled")) {
-            updateToggleButton(false);
-        } else {
-            showNotification("Erreur caméra: " + error.message, true);
-        }
+    } catch (error) {
+        console.error("Erreur startScanning:", error);
+        showNotification("Erreur: " + error.message, true);
+        stopScanning(); // Nettoyage en cas d'erreur
     } finally {
         elements.btnToggle.disabled = false;
     }
 }
 
-function stopScanner() {
-    try {
-        barcodeScanner.dispose();
-    } catch (e) {
-        console.error("Erreur dispose:", e);
+function stopScanning() {
+    console.log("Arrêt du scanner...");
+
+    // 1. Dispose de l'instance scanner
+    if (barcodeScanner) {
+        try {
+            barcodeScanner.dispose();
+            console.log("Instance scanner détruite");
+        } catch (e) {
+            console.error("Erreur destruction scanner:", e);
+        }
+        barcodeScanner = null;
     }
-    barcodeScanner = null;
+
+    // 2. Masquer le container
+    elements.scannerContainer.classList.add("hidden");
+
+    // 3. Nettoyer le container DOM par sécurité (pour supprimer d'éventuels iframes/videos orphelins)
+    // Attention: le spinner est dans le HTML statique, donc on ne vide pas tout brutalement si on veut le garder
+    // Mais Dynamsoft ajoute ses éléments, donc on peut vouloir reset.
+    // Pour l'instant on se fie à dispose() et au CSS hidden.
+
+    // 4. Reset état
+    isScanning = false;
+    updateToggleButton(false, "Démarrer");
+    elements.btnToggle.disabled = false;
 }
-
-elements.scannerContainer.classList.add("hidden");
-
-isScanning = false;
-updateToggleButton(false);
-console.log("Scanner arrêté");
-
-// On ne relance PAS initScanner ici, sinon ça repart en boucle si on avait un auto-start.
-// L'initialisation se fera au prochain click sur Démarrer.
-
 
 function toggleScanner() {
-    console.log("Toggle click, isScanning:", isScanning);
     if (isScanning) {
-        stopScanner();
+        stopScanning();
     } else {
-        // Si le scanner n'existe pas encore, on l'initialise et on le lance
-        if (!barcodeScanner) {
-            initScanner().then(() => startScanner());
-        } else {
-            startScanner();
-        }
+        startScanning();
     }
 }
 
-
-function updateToggleButton(scanning) {
-    isScanning = scanning;
-    elements.btnToggleText.textContent = scanning ? "Arrêter" : "Démarrer";
-    elements.btnToggle.classList.toggle("active", scanning);
+function updateToggleButton(active, text) {
+    elements.btnToggle.classList.toggle("active", active);
+    if (text) {
+        elements.btnToggleText.textContent = text;
+    } else {
+        elements.btnToggleText.textContent = active ? "Arrêter" : "Démarrer";
+    }
 }
 
-// ===== Gestion des codes-barres scannés =====
-function handleBarcodeScanned(result) {
-    const barcodeText = result.text;
-    const timestamp = new Date();
+// ===== Gestion Inventaire =====
 
-    // Ajouter à l'inventaire
+function handleBarcodeScanned(result) {
+    const code = result.text;
+    console.log("Scan:", code);
+
     const item = {
         id: Date.now(),
-        code: barcodeText,
+        code: code,
         format: result.formatString || "CODE_128",
-        timestamp: timestamp.toISOString()
+        timestamp: new Date().toISOString()
     };
 
     inventory.unshift(item);
     saveInventory();
     renderInventory();
+    showNotification(code);
 
-    // Notification visuelle
-    showNotification(barcodeText);
-
-    // Vibration si supportée
     if (navigator.vibrate) {
         navigator.vibrate(100);
     }
-
-    console.log("Code scanné:", barcodeText);
 }
 
-// ===== Affichage de l'inventaire =====
 function renderInventory() {
     elements.scanCount.textContent = inventory.length;
 
@@ -236,125 +183,83 @@ function renderInventory() {
             <li class="empty-state">
                 <span class="empty-icon">📷</span>
                 <p>Scannez un code-barres pour commencer</p>
-            </li>
-        `;
+            </li>`;
         return;
     }
 
-    elements.inventoryList.innerHTML = inventory.map(item => {
-        const time = new Date(item.timestamp);
-        const timeStr = time.toLocaleTimeString("fr-FR", {
-            hour: "2-digit",
-            minute: "2-digit"
-        });
-
-        return `
-            <li class="inventory-item" data-id="${item.id}">
-                <div>
-                    <span class="item-code">${escapeHtml(item.code)}</span>
-                    <span class="item-time">${timeStr}</span>
-                </div>
-                <button class="btn btn-icon btn-delete" onclick="deleteItem(${item.id})" title="Supprimer">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-            </li>
-        `;
-    }).join("");
+    elements.inventoryList.innerHTML = inventory.map(item => `
+        <li class="inventory-item">
+            <div>
+                <span class="item-code">${escapeHtml(item.code)}</span>
+                <span class="item-time">${new Date(item.timestamp).toLocaleTimeString("fr-FR")}</span>
+            </div>
+            <button class="btn btn-icon btn-delete" onclick="window.deleteItem(${item.id})">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </li>
+    `).join("");
 }
 
-function deleteItem(id) {
-    inventory = inventory.filter(item => item.id !== id);
+// Exposer deleteItem globalement pour le onclick
+window.deleteItem = function (id) {
+    inventory = inventory.filter(i => i.id !== id);
     saveInventory();
     renderInventory();
-}
+};
 
 function clearInventory() {
-    if (inventory.length === 0) return;
-
-    if (confirm("Effacer tous les codes scannés ?")) {
+    if (inventory.length > 0 && confirm("Tout effacer ?")) {
         inventory = [];
         saveInventory();
         renderInventory();
-        showNotification("Liste effacée");
+        showNotification("Lise effacée");
     }
 }
 
-// ===== Persistance localStorage =====
+function exportToCSV() {
+    if (inventory.length === 0) return showNotification("Rien à exporter", true);
+
+    const csv = [
+        "Code;Format;Date;Heure",
+        ...inventory.map(i => {
+            const d = new Date(i.timestamp);
+            return `${i.code};${i.format};${d.toLocaleDateString()};${d.toLocaleTimeString()}`;
+        })
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inventaire-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+// ===== Persistance & Utils =====
+
 function saveInventory() {
-    try {
-        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(inventory));
-    } catch (e) {
-        console.error("Erreur sauvegarde:", e);
-    }
+    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(inventory));
 }
 
 function loadInventory() {
     try {
-        const saved = localStorage.getItem(CONFIG.STORAGE_KEY);
-        if (saved) {
-            inventory = JSON.parse(saved);
-        }
-    } catch (e) {
-        console.error("Erreur chargement:", e);
-        inventory = [];
-    }
+        const data = localStorage.getItem(CONFIG.STORAGE_KEY);
+        if (data) inventory = JSON.parse(data);
+    } catch (e) { console.error(e); }
 }
 
-// ===== Export CSV =====
-function exportToCSV() {
-    if (inventory.length === 0) {
-        showNotification("Aucun code à exporter", true);
-        return;
-    }
-
-    const headers = ["Code", "Format", "Date", "Heure"];
-    const rows = inventory.map(item => {
-        const date = new Date(item.timestamp);
-        return [
-            item.code,
-            item.format,
-            date.toLocaleDateString("fr-FR"),
-            date.toLocaleTimeString("fr-FR")
-        ];
-    });
-
-    const csvContent = [
-        headers.join(";"),
-        ...rows.map(row => row.join(";"))
-    ].join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `inventaire_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    showNotification(`${inventory.length} codes exportés`);
-}
-
-// ===== Notifications =====
-let notificationTimeout = null;
-
-function showNotification(message, isError = false) {
-    elements.notificationText.textContent = message;
+function showNotification(msg, isError = false) {
+    elements.notificationText.textContent = msg;
     elements.notification.style.background = isError ? "#ef4444" : "#10b981";
     elements.notification.classList.remove("hidden");
-
-    clearTimeout(notificationTimeout);
-    notificationTimeout = setTimeout(() => {
-        elements.notification.classList.add("hidden");
-    }, 2000);
+    setTimeout(() => elements.notification.classList.add("hidden"), 2000);
 }
 
-// ===== Utilitaires =====
 function escapeHtml(text) {
     const div = document.createElement("div");
     div.textContent = text;
