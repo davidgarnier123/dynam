@@ -91,8 +91,15 @@ async function startScanning() {
 
         barcodeScanner = new Dynamsoft.BarcodeScanner(config);
 
-        // 4. Lancement
-        await barcodeScanner.launch();
+        // 4. Lancement avec timeout (10s) pour ne pas bloquer l'UI
+        console.log("Lancement (launch)...");
+
+        const launchPromise = barcodeScanner.launch();
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Timeout: Le scanner ne répond pas (10s)")), 10000)
+        );
+
+        await Promise.race([launchPromise, timeoutPromise]);
 
         isScanning = true;
         updateToggleButton(true, "Arrêter");
@@ -100,10 +107,19 @@ async function startScanning() {
 
     } catch (error) {
         console.error("Erreur startScanning:", error);
-        showNotification("Erreur: " + error.message, true);
-        stopScanning(); // Nettoyage en cas d'erreur
+
+        let msg = "Erreur: " + error.message;
+        if (msg.includes("Timeout")) msg = "Erreur: Scanner bloqué. Vérifiez la caméra.";
+        if (msg.includes("Permission")) msg = "Erreur: Accès caméra refusé.";
+
+        showNotification(msg, true);
+        stopScanning(); // Reset propre
     } finally {
         elements.btnToggle.disabled = false;
+        // Sécurité ultime: si on est encore en "Chargement...", on reset
+        if (elements.btnToggleText.textContent === "Chargement...") {
+            updateToggleButton(false, "Démarrer");
+        }
     }
 }
 
