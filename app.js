@@ -134,8 +134,13 @@ async function startScanner() {
 
         await barcodeScanner.launch();
 
+        elements.scannerContainer.classList.remove("hidden");
+        // Re-force le container car dynamsoft peut avoir ses propres idées
+        barcodeScanner.show();
+
         isScanning = true;
         updateToggleButton(true);
+        console.log("Scanner démarré");
     } catch (error) {
         // ... (reste du catch)
         console.error("Erreur démarrage scanner:", error);
@@ -152,22 +157,26 @@ async function startScanner() {
 }
 
 function stopScanner() {
-    if (barcodeScanner) {
-        try {
-            barcodeScanner.dispose();
-        } catch (e) {
-            console.error("Erreur dispose:", e);
-        }
-        barcodeScanner = null;
+    try {
+        barcodeScanner.dispose();
+    } catch (e) {
+        console.error("Erreur dispose:", e);
     }
-    isScanning = false;
-    updateToggleButton(false);
+    barcodeScanner = null;
+}
+
+elements.scannerContainer.classList.add("hidden");
+
+isScanning = false;
+updateToggleButton(false);
+console.log("Scanner arrêté");
 
     // On ne relance PAS initScanner ici, sinon ça repart en boucle si on avait un auto-start.
     // L'initialisation se fera au prochain click sur Démarrer.
 }
 
 function toggleScanner() {
+    console.log("Toggle click, isScanning:", isScanning);
     if (isScanning) {
         stopScanner();
     } else {
