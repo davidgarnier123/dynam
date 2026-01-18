@@ -38,7 +38,9 @@ document.addEventListener("DOMContentLoaded", () => {
     loadInventory();
     renderInventory();
     setupEventListeners();
-    initScanner();
+    // On initialise le scanner mais sans le démarrer
+    // initScanner(); // On laisse le bouton gérer l'init
+    updateToggleButton(false);
 });
 
 // ===== Configuration des événements =====
@@ -67,8 +69,8 @@ async function initScanner() {
             // Masquer le bouton powered by
             showPoweredByDynamsoft: false,
 
-            // Démarrer automatiquement la capture une fois la caméra ouverte
-            autoStartCapturing: true,
+            // Ne PAS démarrer automatiquement la capture lors de l'init si on veut contrôler le démarrage
+            autoStartCapturing: false,
 
             // Masquer le bouton d'upload d'image
             showUploadImageButton: false,
@@ -108,8 +110,11 @@ async function initScanner() {
         // Créer l'instance du scanner
         barcodeScanner = new Dynamsoft.BarcodeScanner(config);
 
-        // Lancer le scanner automatiquement
-        await startScanner();
+        // Ne pas lancer le scanner automatiquement ici si on veut le contrôler manuellement
+        // Le premier lancement se fera via le bouton ou explicitement
+        if (isScanning) {
+            await startScanner();
+        }
 
     } catch (error) {
         console.error("Erreur initialisation scanner:", error);
@@ -144,23 +149,31 @@ async function startScanner() {
 
 function stopScanner() {
     if (barcodeScanner) {
+        // En mode single/multi unique, close() suffit pour arrêter la caméra sans détruire l'instance
+        // Mais dispose() nettoie tout. Si on utilise dispose(), il faut recréer l'instance.
         barcodeScanner.dispose();
         barcodeScanner = null;
     }
     isScanning = false;
     updateToggleButton(false);
 
-    // Recréer le scanner pour pouvoir le relancer
-    initScanner();
+    // On ne relance PAS initScanner ici, sinon ça repart en boucle si on avait un auto-start.
+    // L'initialisation se fera au prochain click sur Démarrer.
 }
 
 function toggleScanner() {
     if (isScanning) {
         stopScanner();
     } else {
-        startScanner();
+        // Si le scanner n'existe pas encore, on l'initialise et on le lance
+        if (!barcodeScanner) {
+            initScanner().then(() => startScanner());
+        } else {
+            startScanner();
+        }
     }
 }
+
 
 function updateToggleButton(scanning) {
     isScanning = scanning;
