@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f0f23">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Scanner de code-barres pour gestion d'inventaire">
+
+    <title>Scanner Inventaire</title>
+
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="stylesheet" href="/styles.css">
+
+    <!-- Dynamsoft Barcode Reader Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/dynamsoft-barcode-reader-bundle@11.2.4000/dist/dbr.bundle.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <h1>📦 Scanner Inventaire</h1>
+            <div class="header-actions">
+                <button id="btn-clear" class="btn btn-icon" title="Effacer la liste">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3,6 5,6 21,6"></polyline>
+                        <path d="M19,6v14a2,2,0,0,1-2,2H7a2,2,0,0,1-2-2V6m3,0V4a2,2,0,0,1,2-2h4a2,2,0,0,1,2,2v2"></path>
+                    </svg>
+                </button>
+                <button id="btn-export" class="btn btn-icon" title="Exporter CSV">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21,15v4a2,2,0,0,1-2,2H5a2,2,0,0,1-2-2v-4"></path>
+                        <polyline points="7,10 12,15 17,10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scanner Container -->
+        <div id="scanner-container" class="scanner-container">
+            <div class="scanner-loading">
+                <div class="spinner"></div>
+                <p>Chargement du scanner...</p>
+            </div>
+        </div>
+
+        <!-- Inventory List -->
+        <div class="inventory-section">
+            <div class="inventory-header">
+                <h2>Codes scannés</h2>
+                <span id="scan-count" class="badge">0</span>
+            </div>
+            <ul id="inventory-list" class="inventory-list">
+                <li class="empty-state">
+                    <span class="empty-icon">📷</span>
+                    <p>Scannez un code-barres pour commencer</p>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Scan Notification -->
+        <div id="scan-notification" class="scan-notification hidden">
+            <span class="notification-icon">✓</span>
+            <span id="notification-text">Code ajouté</span>
+        </div>
+
+        <!-- Control Button -->
+        <button id="btn-toggle-scanner" class="btn btn-primary btn-floating">
+            <span id="btn-toggle-text">Démarrer</span>
+        </button>
+    </div>
+
+    <script type="module" src="/app.js"></script>
+</body>
+
+</html>
