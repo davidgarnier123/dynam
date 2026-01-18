@@ -96,7 +96,7 @@ async function startScanning() {
 
         const launchPromise = barcodeScanner.launch();
         const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("Timeout: Le scanner ne répond pas (10s)")), 10000)
+            setTimeout(() => reject(new Error("Timeout: Le scanner ne répond pas (30s)")), 30000)
         );
 
         await Promise.race([launchPromise, timeoutPromise]);
