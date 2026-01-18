@@ -134,12 +134,14 @@ body {
     padding: 14px 32px;
     border-radius: var(--radius-full);
     font-size: 1rem;
-    z-index: 9999;
+    /* z-index: 100; - managed by visibility */
 }
 
-.btn-floating.active {
-    background: linear-gradient(135deg, var(--accent-danger), #dc2626);
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4);
+/* .btn-floating.active removed as we hide it */
+
+/* ===== Utilities ===== */
+.hidden {
+    display: none !important;
 }
 
 /* ===== Scanner Container ===== */

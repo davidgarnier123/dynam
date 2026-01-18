@@ -1,6 +1,5 @@
 /**
- * PWA Scanner Inventaire - Application principale
- * Documentation based implementation
+ * PWA Scanner Inventaire - Native Controls Implementation
  */
 
 // ===== Configuration =====
@@ -9,11 +8,11 @@ const CONFIG = {
     STORAGE_KEY: "barcode_inventory"
 };
 
-// ===== Variables Globales =====
+// ===== State =====
 let barcodeScanner = null;
 let inventory = [];
 
-// ===== Éléments DOM =====
+// ===== DOM Elements =====
 const el = {
     videoContainer: document.getElementById("scanner-container"),
     list: document.getElementById("inventory-list"),
@@ -24,122 +23,117 @@ const el = {
     notificationText: document.getElementById("notification-text")
 };
 
-// ===== Initialisation =====
+// ===== Initialization =====
 document.addEventListener("DOMContentLoaded", () => {
     loadInventory();
     renderInventory();
 
-    // Initial state: hidden
-    el.videoContainer.style.display = 'none';
+    // Initial UI State
+    el.videoContainer.style.display = 'none'; // Hidden by default
+    el.btnToggle.classList.remove("hidden"); // Start button visible
 
-    // Buttons
-    el.btnToggle.addEventListener("click", toggleScanner);
+    // Event Listeners
+    el.btnToggle.addEventListener("click", startScanner);
     document.getElementById("btn-clear").addEventListener("click", clearInventory);
     document.getElementById("btn-export").addEventListener("click", exportToCSV);
 });
 
-// ===== Logic Scanner =====
-
-async function toggleScanner() {
-    // Si déjà actif => On arrête
-    if (el.btnToggle.classList.contains("active")) {
-        await stopScanner();
-        return;
-    }
-
-    // Sinon => On démarre
-    await startScanner();
-}
+// ===== Scanner Logic =====
 
 async function startScanner() {
     try {
-        setButtonState("loading");
+        // 1. UI Feedback: Loading
+        el.btnToggle.disabled = true;
+        el.btnText.textContent = "Chargement...";
 
-        // 1. Initialisation (si null)
+        // 2. Initialize Scanner (Singleton-ish)
         if (!barcodeScanner) {
-            /** @type {BarcodeScannerConfig} */
-            const config = {
-                license: CONFIG.LICENSE_KEY,
-                // Scan continu
-                scanMode: Dynamsoft.EnumScanMode.SM_MULTI_UNIQUE,
-                // Container
-                container: el.videoContainer,
-                // UI & Formats
-                barcodeFormats: [Dynamsoft.DBR.EnumBarcodeFormat.BF_CODE_128],
-                showPoweredByDynamsoft: false,
-                autoStartCapturing: true,
-                duplicateForgetTime: 2000,
-                // UI Config
-                scannerViewConfig: {
-                    showCloseButton: false, // On utilise notre propre bouton
-                    showFlashButton: true,
-                    cameraSwitchControl: "toggleFrontBack",
-                },
-                onUniqueBarcodeScanned: (result) => {
-                    handleScan(result.text);
-                },
-                onInitReady: (comps) => {
-                    comps.cameraView.setScanLaserVisible(true);
-                }
-            };
-
-            barcodeScanner = new Dynamsoft.BarcodeScanner(config);
+            barcodeScanner = await Dynamsoft.BarcodeScanner.createInstance();
         }
 
-        // 2. Afficher la zone AVANT de lancer (pour voir le spinner CSS si présent)
-        el.videoContainer.style.display = 'block';
+        // 3. Configure Scanner
+        await barcodeScanner.updateRuntimeSettings("speed"); // Preset for speed
+        const settings = await barcodeScanner.getRuntimeSettings();
+        settings.barcodeFormatIds = Dynamsoft.DBR.EnumBarcodeFormat.BF_CODE_128;
+        await barcodeScanner.updateRuntimeSettings(settings);
 
-        // 3. Lancer
+        // 4. Configure UI (Native Controls)
+        let scannerViewConfig = {
+            // Container defined here
+            container: el.videoContainer,
+            showCloseButton: true, // NATIVE CLOSE BUTTON
+            showFlashButton: true,
+            cameraSwitchControl: "toggleFrontBack",
+            // Custom overlay? No, user wants simple.
+        };
+
+        await barcodeScanner.updateVideoSettings({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "environment" } });
+
+        // Note: createInstance doesn't take config quite like the simplified constructor in previous versions?
+        // Actually the previous constructor `new Dynamsoft.BarcodeScanner(config)` was the high-level API.
+        // Let's stick to the high-level API which is easier for UI config.
+
+        // Re-init with high level API for simpler UI config
+        if (barcodeScanner) { try { barcodeScanner.dispose(); } catch (e) { } }
+
+        const config = {
+            license: CONFIG.LICENSE_KEY,
+            scanMode: Dynamsoft.EnumScanMode.SM_MULTI_UNIQUE,
+            container: el.videoContainer,
+            barcodeFormats: [Dynamsoft.DBR.EnumBarcodeFormat.BF_CODE_128],
+            showPoweredByDynamsoft: false,
+            autoStartCapturing: true,
+            duplicateForgetTime: 2000,
+            showResultView: false, // NO RESULT VIEW (User request)
+            scannerViewConfig: {
+                showCloseButton: true, // ENABLE Native Close
+                showFlashButton: true,
+                cameraSwitchControl: "toggleFrontBack",
+            },
+            onUniqueBarcodeScanned: (result) => {
+                handleScan(result.text);
+            }
+        };
+
+        barcodeScanner = new Dynamsoft.BarcodeScanner(config);
+
+        // 5. Show Container & Hide Start Button
+        el.videoContainer.style.display = 'block';
+        el.btnToggle.classList.add("hidden"); // Hide our custom button
+
+        // 6. Launch & Wait for Close
+        // launch() promise resolves when the scanner is closed via the native button!
         await barcodeScanner.launch();
 
-        setButtonState("scanning");
+        // 7. Scanner Closed (Native 'X' clicked)
+        console.log("Scanner closed via native button");
+        stopScannerCleanup();
 
     } catch (err) {
-        console.error("Start Error:", err);
+        console.error("Scanner Error:", err);
         showNotif("Erreur: " + err.message, true);
-        await stopScanner(); // Fallback
+        stopScannerCleanup();
     }
 }
 
-async function stopScanner() {
-    try {
-        setButtonState("loading"); // Feedback immédiat
+async function stopScannerCleanup() {
+    // UI Cleanup
+    el.videoContainer.style.display = 'none';
+    el.btnToggle.classList.remove("hidden"); // Show Start Button again
+    el.btnToggle.disabled = false;
+    el.btnText.textContent = "Scanner";
 
-        if (barcodeScanner) {
-            // dispose() est la méthode radicale mais sûre pour tout nettoyer (caméra, ui, workers)
+    // Dispose resources to be clean
+    if (barcodeScanner) {
+        try {
             barcodeScanner.dispose();
             barcodeScanner = null;
-        }
-
-    } catch (err) {
-        console.error("Stop Error:", err);
-    } finally {
-        // UI Clean up
-        el.videoContainer.style.display = 'none';
-        setButtonState("stopped");
+        } catch (e) { console.error(e); }
     }
 }
 
-// ===== UI Extras =====
 
-function setButtonState(state) {
-    el.btnToggle.disabled = (state === "loading");
-
-    if (state === "loading") {
-        el.btnText.textContent = "Chargement...";
-        el.btnToggle.classList.remove("active");
-    } else if (state === "scanning") {
-        el.btnText.textContent = "Arrêter";
-        el.btnToggle.classList.add("active");
-        // IMPORTANT: z-index très haut pour passer au dessus de la vidéo
-        el.btnToggle.style.zIndex = "99999";
-    } else {
-        el.btnText.textContent = "Démarrer";
-        el.btnToggle.classList.remove("active");
-    }
-}
-
-// ===== Inventory Logic (inchangé, simplifié) =====
+// ===== Inventory Logic =====
 
 function handleScan(code) {
     const item = {
@@ -156,19 +150,19 @@ function handleScan(code) {
 
 function renderInventory() {
     el.count.textContent = inventory.length;
-
     if (inventory.length === 0) {
         el.list.innerHTML = `<li class="empty-state">📷 <p>Prêt à scanner</p></li>`;
         return;
     }
-
     el.list.innerHTML = inventory.map(item => `
         <li class="inventory-item">
             <div>
                 <span class="item-code">${item.code}</span>
                 <span class="item-time">${new Date(item.timestamp).toLocaleTimeString("fr-FR")}</span>
             </div>
-            <button class="btn btn-icon btn-delete" onclick="deleteItem(${item.id})">🗑️</button>
+            <button class="btn btn-icon btn-delete" onclick="window.deleteItem(${item.id})">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
         </li>
     `).join("");
 }
@@ -180,6 +174,7 @@ window.deleteItem = (id) => {
 };
 
 function clearInventory() {
+    if (!inventory.length) return;
     if (confirm("Tout effacer ?")) {
         inventory = [];
         saveInventory();
@@ -205,7 +200,7 @@ function loadInventory() {
 
 function showNotif(msg, isError = false) {
     el.notificationText.textContent = msg;
-    el.notification.style.background = isError ? "red" : "green";
+    el.notification.style.background = isError ? "#ef4444" : "#10b981";
     el.notification.classList.remove("hidden");
     setTimeout(() => el.notification.classList.add("hidden"), 2000);
 }
